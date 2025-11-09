@@ -23,7 +23,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.auth.ktx.userProfileChangeRequest
 import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.tasks.await
+import com.google.firebase.firestore.ktx.firestore
+
+
 
 @Composable
 fun NexusRegisterScreen(navController: NavController) {
@@ -161,7 +163,26 @@ fun NexusRegisterScreen(navController: NavController) {
                         auth.createUserWithEmailAndPassword(email.trim(), password)
                             .addOnCompleteListener { task ->
                                 if (task.isSuccessful) {
+                                    val db = Firebase.firestore
                                     val user = auth.currentUser
+
+                                    if (user != null) {
+                                        val userData = hashMapOf(
+                                            "nombre" to name.trim(),
+                                            "email" to email.trim(),
+                                            "saldo" to 0.0 // 💰 saldo inicial
+                                        )
+
+                                        db.collection("usuarios").document(user.uid).set(userData)
+                                            .addOnSuccessListener {
+                                                Toast.makeText(context, "Cuenta creada con saldo inicial 0.0", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .addOnFailureListener {
+                                                Toast.makeText(context, "Error al guardar datos del usuario", Toast.LENGTH_SHORT).show()
+                                            }
+                                    }
+
+
                                     val profileUpdates = userProfileChangeRequest {
                                         displayName = name.trim()
                                     }
