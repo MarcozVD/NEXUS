@@ -38,33 +38,41 @@ fun NexusHomeScreen(
     onNavigateToSendMoney: () -> Unit = {},
     onNavigateToProducts: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToSavings: () -> Unit = {}
 ) {
     val auth = Firebase.auth
     val db = Firebase.firestore
     val context = LocalContext.current
 
     var saldo by remember { mutableStateOf<Double?>(null) }
+    var saldoGuardado by remember { mutableStateOf(0.0) }
     var userName by remember { mutableStateOf("Usuario") }
     var showRechargeDialog by remember { mutableStateOf(false) }
     var rechargeAmount by remember { mutableStateOf(5000f) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Calcular saldo total y disponible
+    val saldoTotal = (saldo ?: 0.0) + saldoGuardado
+    val saldoDisponible = saldo ?: 0.0
+
     LaunchedEffect(Unit) {
         val user = auth.currentUser
         if (user != null) {
-            db.collection("usuarios").document(user.uid).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
+            db.collection("usuarios").document(user.uid)
+                .addSnapshotListener { document, error ->
+                    if (error != null) {
+                        return@addSnapshotListener
+                    }
+                    if (document != null && document.exists()) {
                         saldo = document.getDouble("saldo") ?: 0.0
+                        saldoGuardado = document.getDouble("saldoGuardado") ?: 0.0
                         userName = document.getString("nombre") ?: "Usuario"
                     } else {
                         saldo = 0.0
+                        saldoGuardado = 0.0
                     }
-                }
-                .addOnFailureListener {
-                    saldo = 0.0
                 }
         }
     }
@@ -136,7 +144,7 @@ fun NexusHomeScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
+                        .height(200.dp),
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = Color.Black
@@ -152,7 +160,7 @@ fun NexusHomeScreen(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
                             Column {
                                 Text(
@@ -169,6 +177,15 @@ fun NexusHomeScreen(
                                     fontFamily = Poppins,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                // Total en pequeño
+                                Text(
+                                    text = "Total: $ ${"%,.2f".format(saldoTotal)}",
+                                    fontSize = 12.sp,
+                                    fontFamily = Poppins,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.6f)
                                 )
                             }
 
@@ -233,7 +250,7 @@ fun NexusHomeScreen(
                         modifier = Modifier.weight(1f),
                         icon = R.drawable.guardar,
                         title = "Guardar",
-                        onClick = { }
+                        onClick = onNavigateToSavings
                     )
                 }
 

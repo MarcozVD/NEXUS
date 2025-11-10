@@ -61,6 +61,9 @@ class MainActivity : ComponentActivity() {
                             },
                             onNavigateToSettings = {
                                 navController.navigate("user_info")
+                            },
+                            onNavigateToSavings = {
+                                navController.navigate("savings")
                             }
                         )
                     }
@@ -133,7 +136,22 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    composable("savings") {
+                        SavingsScreen(
+                            onNavigateToNotifications = {
+                                navController.navigate("notifications")
+                            },
+                            onNavigateToSettings = {
+                                navController.navigate("user_info")
+                            },
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
                 }
+
             }
         }
     }
