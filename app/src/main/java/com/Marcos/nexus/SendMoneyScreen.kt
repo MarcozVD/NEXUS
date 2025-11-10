@@ -566,10 +566,3 @@ private fun processTransaction(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun SendMoneyScreenPreview() {
-    MaterialTheme {
-        SendMoneyScreen(onBack = {})
-    }
-}

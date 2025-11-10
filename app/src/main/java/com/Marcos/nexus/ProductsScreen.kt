@@ -3,7 +3,6 @@ package com.Marcos.nexus
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.content.MediaType.Companion.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,12 +12,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -49,7 +48,8 @@ fun ProductsScreen(
     onNavigateToInversiones: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onBack: () -> Unit = {}
+    onBack: () -> Unit = {},
+    onNavigateToNexusCard: () -> Unit = {}
 ) {
     val db = Firebase.firestore
     val auth = Firebase.auth
@@ -95,7 +95,16 @@ fun ProductsScreen(
                                 return@addSnapshotListener
                             }
 
+                            // 🔥 CORRECCIÓN: Filtrar transacciones donde remitente = destinatario
                             val receivedTransactions = snapshot2?.documents?.mapNotNull { doc ->
+                                val remitenteId = doc.getString("remitenteId")
+                                val destinatarioId = doc.getString("destinatarioId")
+
+                                // Si es la misma persona (recarga), ignorar aquí para evitar duplicados
+                                if (remitenteId == destinatarioId) {
+                                    return@mapNotNull null
+                                }
+
                                 Transaction(
                                     id = doc.id,
                                     nombre = doc.getString("remitenteNombre") ?: "Usuario",
@@ -163,7 +172,7 @@ fun ProductsScreen(
                     }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
-                            imageVector = Icons.Default.Settings,
+                            imageVector = Icons.Default.Person,
                             contentDescription = "Configuración",
                             tint = Color.Black
                         )
@@ -194,7 +203,7 @@ fun ProductsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
-                        .clickable { },
+                        .clickable {onNavigateToNexusCard() },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = Color.Transparent
@@ -226,7 +235,7 @@ fun ProductsScreen(
                         ) {
 
 
-                                // Logo tipo Mastercard
+                            // Logo tipo Mastercard
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -491,10 +500,3 @@ fun TransactionItem(transaction: Transaction) {
     }
 }
 
-@Preview(showBackground = true, device = "spec:width=375dp,height=812dp")
-@Composable
-fun ProductsScreenPreview() {
-    MaterialTheme {
-        ProductsScreen()
-    }
-}
