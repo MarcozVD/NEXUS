@@ -28,7 +28,6 @@ class MainActivity : ComponentActivity() {
                 NavHost(navController = navController, startDestination = startDestination) {
                     composable("login") {
                         BackHandler {
-                            // Cerrar la app cuando presione atrás en login
                             finish()
                         }
                         NexusLoginScreen(navController)
@@ -36,7 +35,6 @@ class MainActivity : ComponentActivity() {
 
                     composable("register") {
                         BackHandler {
-                            // Volver al login cuando presione atrás en register
                             navController.navigate("login") {
                                 popUpTo("register") { inclusive = true }
                             }
@@ -46,7 +44,6 @@ class MainActivity : ComponentActivity() {
 
                     composable("home") {
                         BackHandler {
-                            // Cerrar la app cuando presione atrás en home
                             finish()
                         }
                         NexusHomeScreen(
@@ -82,10 +79,10 @@ class MainActivity : ComponentActivity() {
                                 navController.popBackStack()
                             },
                             onNavigateToCartera = {
-                                // navController.navigate("cartera")
+                                navController.navigate("savings")
                             },
                             onNavigateToInversiones = {
-                                // navController.navigate("inversiones")
+                                navController.navigate("investments")
                             },
                             onNavigateToNotifications = {
                                 navController.navigate("notifications")
@@ -113,6 +110,36 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    // 🔥 RUTA DE INVERSIONES
+                    composable("investments") {
+                        InvestmentsScreen(
+                            onBack = {
+                                navController.popBackStack()
+                            },
+                            onNavigateToNotifications = {
+                                navController.navigate("notifications")
+                            },
+                            onNavigateToSettings = {
+                                navController.navigate("user_info")
+                            }
+                        )
+                    }
+
+                    // 🔥 RUTA DE AHORROS/CARTERA
+                    composable("savings") {
+                        SavingsScreen(
+                            onBack = {
+                                navController.popBackStack()
+                            },
+                            onNavigateToNotifications = {
+                                navController.navigate("notifications")
+                            },
+                            onNavigateToSettings = {
+                                navController.navigate("user_info")
+                            }
+                        )
+                    }
+
                     composable("notifications") {
                         NotificationsScreen(
                             onBack = {
@@ -127,31 +154,14 @@ class MainActivity : ComponentActivity() {
                                 navController.popBackStack()
                             },
                             onLogout = {
-                                // Cerrar sesión de Firebase
                                 Firebase.auth.signOut()
-                                // Navegar al login y limpiar todo el backstack
                                 navController.navigate("login") {
                                     popUpTo(0) { inclusive = true }
                                 }
                             }
                         )
                     }
-
-                    composable("savings") {
-                        SavingsScreen(
-                            onNavigateToNotifications = {
-                                navController.navigate("notifications")
-                            },
-                            onNavigateToSettings = {
-                                navController.navigate("user_info")
-                            },
-                            onBack = {
-                                navController.popBackStack()
-                            }
-                        )
-                    }
                 }
-
             }
         }
     }
