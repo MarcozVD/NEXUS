@@ -80,7 +80,7 @@ fun InvestmentsScreen(
             plazoMeses = 6,
             montoMinimo = 50000.0,
             riesgo = "Bajo",
-            icon = Icons.Default.AccountBalance,
+            icon = Icons.Default.Savings,
             color = Color(0xFF4CAF50)
         ),
         InvestmentOption(
@@ -132,6 +132,9 @@ fun InvestmentsScreen(
     LaunchedEffect(Unit) {
         val user = auth.currentUser
         if (user != null) {
+            // 🔥 VERIFICAR INVERSIONES COMPLETADAS
+            verificarInversionesCompletadas(user.uid, db, context)
+
             db.collection("usuarios").document(user.uid)
                 .addSnapshotListener { document, error ->
                     if (error != null) return@addSnapshotListener
@@ -271,7 +274,7 @@ fun InvestmentsScreen(
                                 }
 
                                 Icon(
-                                    imageVector = Icons.Default.Savings,
+                                    imageVector = Icons.Default.AccountBalance,
                                     contentDescription = null,
                                     tint = Color.White.copy(alpha = 0.3f),
                                     modifier = Modifier.size(48.dp)
@@ -379,13 +382,29 @@ fun InvestmentsScreen(
                                             )
 
                                             db.collection("inversiones").add(inversion)
+                                                .addOnSuccessListener {
+                                                    // 🔥 CREAR NOTIFICACIÓN DE INVERSIÓN REALIZADA
+                                                    val notificacion = hashMapOf(
+                                                        "userId" to user.uid,
+                                                        "tipo" to "inversion",
+                                                        "titulo" to "Inversión realizada",
+                                                        "mensaje" to "Has invertido $${"%,.0f".format(amount)} en ${selectedOption!!.nombre} con una tasa del ${selectedOption!!.tasaInteres}% anual por ${selectedOption!!.plazoMeses} meses.",
+                                                        "fecha" to Timestamp.now(),
+                                                        "leida" to false
+                                                    )
 
-                                            showInvestDialog = false
-                                            Toast.makeText(
-                                                context,
-                                                "Inversión realizada exitosamente",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                                    db.collection("notificaciones").add(notificacion)
+
+                                                    showInvestDialog = false
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Inversión realizada exitosamente",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                                .addOnFailureListener {
+                                                    Toast.makeText(context, "Error al procesar inversión", Toast.LENGTH_SHORT).show()
+                                                }
                                         }
                                         .addOnFailureListener {
                                             Toast.makeText(context, "Error al procesar inversión", Toast.LENGTH_SHORT).show()
@@ -397,6 +416,103 @@ fun InvestmentsScreen(
             )
         }
     }
+}
+
+// 🔥 FUNCIÓN PARA VERIFICAR INVERSIONES COMPLETADAS
+fun verificarInversionesCompletadas(
+    userId: String,
+    db: com.google.firebase.firestore.FirebaseFirestore,
+    context: android.content.Context
+) {
+    val ahora = Timestamp.now()
+
+    db.collection("inversiones")
+        .whereEqualTo("usuarioId", userId)
+        .whereEqualTo("estado", "activa")
+        .get()
+        .addOnSuccessListener { snapshot ->
+            snapshot.documents.forEach { doc ->
+                val fechaFin = doc.getTimestamp("fechaFin")
+
+                if (fechaFin != null && fechaFin.toDate() <= ahora.toDate()) {
+                    // La inversión ha terminado
+                    val monto = doc.getDouble("monto") ?: 0.0
+                    val tasaInteres = doc.getDouble("tasaInteres") ?: 0.0
+                    val plazo = doc.getLong("plazo")?.toInt() ?: 0
+                    val nombre = doc.getString("nombre") ?: "Inversión"
+
+                    // Calcular ganancia
+                    val gananciaAnual = monto * (tasaInteres / 100)
+                    val gananciaMensual = gananciaAnual / 12
+                    val gananciaTotal = gananciaMensual * plazo
+                    val montoFinal = monto + gananciaTotal
+
+                    // Actualizar saldo del usuario
+                    val userRef = db.collection("usuarios").document(userId)
+                    userRef.get().addOnSuccessListener { userDoc ->
+                        if (userDoc.exists()) {
+                            val saldoActual = userDoc.getDouble("saldo") ?: 0.0
+                            val nuevoSaldo = saldoActual + montoFinal
+
+                            userRef.update(
+                                mapOf(
+                                    "saldo" to saldoActual,  // Saldo disponible se mantiene
+                                    "saldoCartera" to (userDoc.getDouble("saldoCartera") ?: 0.0) + montoFinal  // Agregar a cartera
+                                )
+                            ).addOnSuccessListener {
+                                    // Marcar inversión como completada
+                                    doc.reference.update("estado", "completada")
+
+
+                                    // 🔥 CREAR NOTIFICACIÓN DE INVERSIÓN COMPLETADA
+                                    val notificacion = hashMapOf(
+                                        "userId" to userId,
+                                        "tipo" to "ganancia",
+                                        "titulo" to "¡Inversión completada!",
+                                        "mensaje" to "Tu inversión en $nombre ha finalizado. Ganaste $${"%,.0f".format(gananciaTotal)}. Total recibido: $${"%,.0f".format(montoFinal)}",
+                                        "fecha" to Timestamp.now(),
+                                        "leida" to false
+                                    )
+
+                                    db.collection("notificaciones").add(notificacion)
+
+
+                                    // Registrar transacción
+                                    val transaccion = hashMapOf(
+                                        "remitenteId" to userId,
+                                        "destinatarioId" to userId,
+                                        "monto" to montoFinal,
+                                        "tipo" to "inversion_completada",
+                                        "origen" to "inversiones",
+                                        "fecha" to Timestamp.now(),
+                                        "remitenteNombre" to (userDoc.getString("nombre") ?: "Usuario"),
+                                        "destinatarioNombre" to (userDoc.getString("nombre") ?: "Usuario"),
+                                        "mensaje" to "Inversión completada: $nombre"
+                                    )
+
+                                    db.collection("transacciones").add(transaccion)
+                                // 🔥 AGREGAR TRANSACCIÓN A CARTERA
+                                    val carteraTransaccion = hashMapOf(
+                                        "usuarioId" to userId,
+                                        "monto" to montoFinal,
+                                        "tipo" to "ingreso",
+                                        "descripcion" to "Ganancia de inversión: $nombre",
+                                        "fecha" to Timestamp.now()
+                                    )
+
+                                    db.collection("carteraTransacciones").add(carteraTransaccion)
+
+                                    Toast.makeText(
+                                        context,
+                                        "Inversión completada: +$${"%,.0f".format(gananciaTotal)}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                        }
+                    }
+                }
+            }
+        }
 }
 
 @Composable
@@ -502,6 +618,8 @@ fun InvestmentOptionCard(
 
 @Composable
 fun MyInvestmentCard(investment: Investment) {
+    val isCompleted = investment.estado == "completada"
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -526,15 +644,15 @@ fun MyInvestmentCard(investment: Investment) {
                     color = Color.Black
                 )
                 Surface(
-                    color = Color(0xFF4CAF50).copy(alpha = 0.1f),
+                    color = if (isCompleted) Color.Gray.copy(alpha = 0.1f) else Color(0xFF4CAF50).copy(alpha = 0.1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "Activa",
+                        text = if (isCompleted) "Completada" else "Activa",
                         fontSize = 11.sp,
                         fontFamily = Poppins,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF4CAF50),
+                        color = if (isCompleted) Color.Gray else Color(0xFF4CAF50),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }

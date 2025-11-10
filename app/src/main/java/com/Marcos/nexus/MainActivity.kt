@@ -79,7 +79,7 @@ class MainActivity : ComponentActivity() {
                                 navController.popBackStack()
                             },
                             onNavigateToCartera = {
-                                navController.navigate("savings")
+                                navController.navigate("cartera")
                             },
                             onNavigateToInversiones = {
                                 navController.navigate("investments")
@@ -161,6 +161,7 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
                 }
             }
         }

@@ -1,6 +1,5 @@
 package com.Marcos.nexus
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,9 +49,13 @@ fun NotificationsScreen(
                 .whereEqualTo("userId", user.uid)
                 .orderBy("fecha", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(50)
-                .get()
-                .addOnSuccessListener { documents ->
-                    notifications = documents.map { doc ->
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        isLoading = false
+                        return@addSnapshotListener
+                    }
+
+                    notifications = snapshot?.documents?.map { doc ->
                         Notification(
                             id = doc.id,
                             tipo = doc.getString("tipo") ?: "info",
@@ -62,10 +64,8 @@ fun NotificationsScreen(
                             fecha = doc.getTimestamp("fecha"),
                             leida = doc.getBoolean("leida") ?: false
                         )
-                    }
-                    isLoading = false
-                }
-                .addOnFailureListener {
+                    } ?: emptyList()
+
                     isLoading = false
                 }
         }
@@ -157,6 +157,8 @@ fun NotificationItem(notification: Notification) {
     val icon = when (notification.tipo) {
         "recarga" -> Icons.Default.Add
         "transferencia" -> Icons.Default.Send
+        "inversion" -> Icons.Default.TrendingUp  // 🔥 NUEVO
+        "ganancia" -> Icons.Default.CheckCircle  // 🔥 NUEVO
         "alerta" -> Icons.Default.Warning
         else -> Icons.Default.Info
     }
@@ -164,6 +166,8 @@ fun NotificationItem(notification: Notification) {
     val iconColor = when (notification.tipo) {
         "recarga" -> Color(0xFF4CAF50)
         "transferencia" -> Color(0xFF2196F3)
+        "inversion" -> Color(0xFFFF9800)  // 🔥 NUEVO - Naranja
+        "ganancia" -> Color(0xFF4CAF50)   // 🔥 NUEVO - Verde
         "alerta" -> Color(0xFFF44336)
         else -> Color.Gray
     }
