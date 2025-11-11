@@ -49,6 +49,9 @@ android {
     // En tu archivo build.gradle o build.gradle.kts (del módulo 'app')
 
 dependencies {
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
     // --- LIBRERÍAS DE ANDROIDX UNIFICADAS ---
     // (Asegúrate de que no haya duplicados de estas en tu archivo)
     implementation("androidx.core:core-ktx:1.12.0") // O la versión que prefieras, pero solo una

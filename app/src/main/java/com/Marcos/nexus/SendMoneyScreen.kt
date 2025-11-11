@@ -59,12 +59,16 @@ fun SendMoneyScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var selectedSource by remember { mutableStateOf("disponible") }
 
+    // 🔥 ACTUALIZACIÓN EN TIEMPO REAL CON SNAPSHOT LISTENER
     LaunchedEffect(Unit) {
         val user = auth.currentUser
         if (user != null) {
-            db.collection("usuarios").document(user.uid).get()
-                .addOnSuccessListener { document ->
-                    if (document.exists()) {
+            db.collection("usuarios").document(user.uid)
+                .addSnapshotListener { document, error ->
+                    if (error != null) {
+                        return@addSnapshotListener
+                    }
+                    if (document != null && document.exists()) {
                         saldoDisponible = document.getDouble("saldo") ?: 0.0
                         saldoCartera = document.getDouble("saldoCartera") ?: 0.0
                     }
@@ -233,6 +237,7 @@ fun SendMoneyScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // 🔥 CARD DISPONIBLE CON SALDO ACTUALIZADO
                 Card(
                     modifier = Modifier
                         .weight(1f)
@@ -271,6 +276,7 @@ fun SendMoneyScreen(
                     }
                 }
 
+                // 🔥 CARD CARTERA CON SALDO ACTUALIZADO
                 Card(
                     modifier = Modifier
                         .weight(1f)
@@ -565,4 +571,3 @@ private fun processTransaction(
         onError("Error al obtener datos del remitente")
     }
 }
-

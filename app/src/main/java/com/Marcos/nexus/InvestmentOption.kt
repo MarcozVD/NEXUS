@@ -435,49 +435,40 @@ fun verificarInversionesCompletadas(
                 val fechaFin = doc.getTimestamp("fechaFin")
 
                 if (fechaFin != null && fechaFin.toDate() <= ahora.toDate()) {
-                    // La inversión ha terminado
                     val monto = doc.getDouble("monto") ?: 0.0
                     val tasaInteres = doc.getDouble("tasaInteres") ?: 0.0
                     val plazo = doc.getLong("plazo")?.toInt() ?: 0
                     val nombre = doc.getString("nombre") ?: "Inversión"
 
-                    // Calcular ganancia
                     val gananciaAnual = monto * (tasaInteres / 100)
                     val gananciaMensual = gananciaAnual / 12
                     val gananciaTotal = gananciaMensual * plazo
                     val montoFinal = monto + gananciaTotal
 
-                    // Actualizar saldo del usuario
                     val userRef = db.collection("usuarios").document(userId)
                     userRef.get().addOnSuccessListener { userDoc ->
                         if (userDoc.exists()) {
-                            val saldoActual = userDoc.getDouble("saldo") ?: 0.0
-                            val nuevoSaldo = saldoActual + montoFinal
+                            val saldoCarteraActual = userDoc.getDouble("saldoCartera") ?: 0.0
+                            val nuevoSaldoCartera = saldoCarteraActual + montoFinal
 
-                            userRef.update(
-                                mapOf(
-                                    "saldo" to saldoActual,  // Saldo disponible se mantiene
-                                    "saldoCartera" to (userDoc.getDouble("saldoCartera") ?: 0.0) + montoFinal  // Agregar a cartera
-                                )
-                            ).addOnSuccessListener {
-                                    // Marcar inversión como completada
+                            // 🔥 ACTUALIZAR SOLO CARTERA (no saldo disponible)
+                            userRef.update("saldoCartera", nuevoSaldoCartera)
+                                .addOnSuccessListener {
                                     doc.reference.update("estado", "completada")
 
-
-                                    // 🔥 CREAR NOTIFICACIÓN DE INVERSIÓN COMPLETADA
+                                    // Notificación
                                     val notificacion = hashMapOf(
                                         "userId" to userId,
                                         "tipo" to "ganancia",
                                         "titulo" to "¡Inversión completada!",
-                                        "mensaje" to "Tu inversión en $nombre ha finalizado. Ganaste $${"%,.0f".format(gananciaTotal)}. Total recibido: $${"%,.0f".format(montoFinal)}",
+                                        "mensaje" to "Tu inversión en $nombre ha finalizado. Ganaste $${"%,.0f".format(gananciaTotal)}. Total en cartera: $${"%,.0f".format(montoFinal)}",
                                         "fecha" to Timestamp.now(),
                                         "leida" to false
                                     )
 
                                     db.collection("notificaciones").add(notificacion)
 
-
-                                    // Registrar transacción
+                                    // Transacción general
                                     val transaccion = hashMapOf(
                                         "remitenteId" to userId,
                                         "destinatarioId" to userId,
@@ -491,7 +482,8 @@ fun verificarInversionesCompletadas(
                                     )
 
                                     db.collection("transacciones").add(transaccion)
-                                // 🔥 AGREGAR TRANSACCIÓN A CARTERA
+
+                                    // 🔥 TRANSACCIÓN DE CARTERA
                                     val carteraTransaccion = hashMapOf(
                                         "usuarioId" to userId,
                                         "monto" to montoFinal,
@@ -504,7 +496,7 @@ fun verificarInversionesCompletadas(
 
                                     Toast.makeText(
                                         context,
-                                        "Inversión completada: +$${"%,.0f".format(gananciaTotal)}",
+                                        "Inversión completada: +$${"%,.0f".format(gananciaTotal)} en cartera",
                                         Toast.LENGTH_LONG
                                     ).show()
                                 }
