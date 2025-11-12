@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,9 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,11 +55,8 @@ fun NexusCard(
     var saldoDisponible by remember { mutableStateOf(0.0) }
     var isCardBlocked by remember { mutableStateOf(false) }
     var showMovements by remember { mutableStateOf(false) }
-    var showLimitsDialog by remember { mutableStateOf(false) }
     var showBenefitsDialog by remember { mutableStateOf(false) }
     var transactions by remember { mutableStateOf<List<TransactionHistory>>(emptyList()) }
-    var savingsGoal by remember { mutableStateOf(0.0) }
-    var currentSavings by remember { mutableStateOf(0.0) }
 
     LaunchedEffect(Unit) {
         val user = auth.currentUser
@@ -74,8 +68,6 @@ fun NexusCard(
                         userName = document.getString("nombre") ?: "Usuario"
                         saldoDisponible = document.getDouble("saldo") ?: 0.0
                         isCardBlocked = document.getBoolean("tarjetaBloqueada") ?: false
-                        savingsGoal = document.getDouble("metaAhorro") ?: 0.0
-                        currentSavings = document.getDouble("ahorroActual") ?: 0.0
                     }
                 }
 
@@ -337,73 +329,6 @@ fun NexusCard(
                     }
                 }
 
-                // Meta de ahorro (si existe)
-                if (savingsGoal > 0) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(20.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Meta de ahorro",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black
-                                    )
-                                    Text(
-                                        text = "${((currentSavings / savingsGoal) * 100).toInt()}%",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF4CAF50)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                LinearProgressIndicator(
-                                    progress = (currentSavings / savingsGoal).toFloat().coerceIn(0f, 1f),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp),
-                                    color = Color(0xFF4CAF50),
-                                    trackColor = Color(0xFFC8E6C9)
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "$ ${"%,.0f".format(currentSavings)}",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.Black.copy(alpha = 0.7f)
-                                    )
-                                    Text(
-                                        text = "Meta: $ ${"%,.0f".format(savingsGoal)}",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.Black.copy(alpha = 0.7f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
                 item {
                     Text(
                         text = "Detalles de la tarjeta",
@@ -425,15 +350,6 @@ fun NexusCard(
                             iconColor = Color.Black,
                             backgroundColor = Color.White,
                             onClick = { showMovements = true }
-                        )
-
-                        CardDetailOption(
-                            icon = Icons.Default.Savings,
-                            title = "Configurar meta",
-                            subtitle = "Define tu meta de ahorro",
-                            iconColor = Color.Black,
-                            backgroundColor = Color.White,
-                            onClick = { showLimitsDialog = true }
                         )
 
                         CardDetailOption(
@@ -513,29 +429,6 @@ fun NexusCard(
             MovementsDialog(
                 transactions = transactions,
                 onDismiss = { showMovements = false }
-            )
-        }
-
-        // Dialog de Meta de Ahorro
-        if (showLimitsDialog) {
-            SavingsGoalDialog(
-                currentGoal = savingsGoal,
-                onDismiss = { showLimitsDialog = false },
-                onConfirm = { newGoal ->
-                    val user = auth.currentUser
-                    if (user != null) {
-                        db.collection("usuarios").document(user.uid)
-                            .update("metaAhorro", newGoal)
-                            .addOnSuccessListener {
-                                Toast.makeText(
-                                    context,
-                                    "Meta de ahorro establecida",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                                showLimitsDialog = false
-                            }
-                    }
-                }
             )
         }
 
@@ -776,122 +669,6 @@ fun TransactionHistoryItem(transaction: TransactionHistory) {
             fontWeight = FontWeight.Bold,
             color = if (isPositive) Color(0xFF4CAF50) else Color(0xFFF44336)
         )
-    }
-}
-
-@Composable
-fun SavingsGoalDialog(
-    currentGoal: Double,
-    onDismiss: () -> Unit,
-    onConfirm: (Double) -> Unit
-) {
-    var amount by remember { mutableStateOf(if (currentGoal > 0) currentGoal.toFloat() else 100000f) }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) { onDismiss() }
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .wrapContentHeight()
-                .align(Alignment.Center)
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { },
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Savings,
-                    contentDescription = null,
-                    tint = Color(0xFF4CAF50),
-                    modifier = Modifier.size(48.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Configura tu meta de ahorro",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = Color.Black
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Establece un objetivo y haz seguimiento de tu progreso",
-                    fontSize = 14.sp,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                OutlinedTextField(
-                    value = if (amount > 0) "%,.0f".format(amount) else "",
-                    onValueChange = { input ->
-                        val cleanInput = input.replace(",", "").replace(".", "")
-                        val newAmount = cleanInput.toFloatOrNull()
-                        if (newAmount != null && newAmount > 0) {
-                            amount = newAmount
-                        }
-                    },
-                    label = { Text("Meta de ahorro") },
-                    prefix = { Text("$", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF4CAF50),
-                        unfocusedBorderColor = Color.Black.copy(alpha = 0.3f),
-                        focusedLabelColor = Color(0xFF4CAF50),
-                        cursorColor = Color(0xFF4CAF50)
-                    ),
-                    textStyle = TextStyle(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = Color.Black
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = {
-                        if (amount > 0) {
-                            onConfirm(amount.toDouble())
-                        }
-                    },
-                    enabled = amount > 0,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "Establecer meta",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        color = Color.White
-                    )
-                }
-            }
-        }
     }
 }
 

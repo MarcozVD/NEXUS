@@ -1,6 +1,5 @@
 package com.Marcos.nexus
 
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -376,7 +375,10 @@ fun WalletScreen(
                 onAmountChange = { transferAmount = it },
                 maxAmount = saldoCartera.toFloat(),
                 isLoading = isTransferring,
-                onDismiss = { showTransferDialog = false },
+                onDismiss = {
+                    showTransferDialog = false
+                    transferAmount = 0f
+                },
                 onConfirm = {
                     isTransferring = true
                     val user = auth.currentUser
@@ -417,6 +419,7 @@ fun WalletScreen(
 
                                     isTransferring = false
                                     showTransferDialog = false
+                                    transferAmount = 0f
 
                                     Toast.makeText(
                                         context,
@@ -642,7 +645,7 @@ fun WalletTransactionItem(transaction: WalletTransaction) {
         }
 
         Text(
-            text = "$amountPrefix$${"%,.0f".format(transaction.monto)}",
+            text = "$amountPrefix$ ${"%,.0f".format(transaction.monto)}",
             fontSize = 16.sp,
             fontFamily = Poppins,
             fontWeight = FontWeight.Bold,

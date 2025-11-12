@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +28,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.ktx.auth
@@ -58,12 +59,14 @@ fun SavingsScreen(
     var userName by remember { mutableStateOf("Usuario") }
     var showSaveDialog by remember { mutableStateOf(false) }
     var showWithdrawDialog by remember { mutableStateOf(false) }
+    var showGoalDialog by remember { mutableStateOf(false) }
     var saveAmount by remember { mutableStateOf(5000f) }
     var withdrawAmount by remember { mutableStateOf(5000f) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var savings by remember { mutableStateOf<List<Saving>>(emptyList()) }
     var isLoadingTransactions by remember { mutableStateOf(true) }
+    var currentGoal by remember { mutableStateOf<SavingsGoal?>(null) }
 
     LaunchedEffect(Unit) {
         val user = auth.currentUser
@@ -100,6 +103,43 @@ fun SavingsScreen(
                     }?.sortedByDescending { it.fecha?.toDate() } ?: emptyList()
 
                     isLoadingTransactions = false
+                }
+
+            // Obtener meta activa
+            db.collection("metasAhorro")
+                .whereEqualTo("usuarioId", user.uid)
+                .whereEqualTo("activa", true)
+                .limit(1)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) return@addSnapshotListener
+
+                    currentGoal = snapshot?.documents?.firstOrNull()?.let { doc ->
+                        val montoActual = saldoGuardado
+                        val montoObjetivo = doc.getDouble("montoObjetivo") ?: 0.0
+                        val completada = montoActual >= montoObjetivo
+
+                        // Si se completó, marcarla como completada
+                        if (completada && doc.getBoolean("completada") != true) {
+                            db.collection("metasAhorro").document(doc.id)
+                                .update(
+                                    mapOf(
+                                        "completada" to true,
+                                        "fechaCompletada" to Timestamp.now()
+                                    )
+                                )
+                        }
+
+                        SavingsGoal(
+                            id = doc.id,
+                            nombre = doc.getString("nombre") ?: "",
+                            montoObjetivo = montoObjetivo,
+                            montoActual = montoActual,
+                            activa = doc.getBoolean("activa") ?: true,
+                            completada = completada,
+                            fechaCreacion = doc.getTimestamp("fechaCreacion"),
+                            fechaCompletada = doc.getTimestamp("fechaCompletada")
+                        )
+                    }
                 }
         }
     }
@@ -299,6 +339,71 @@ fun SavingsScreen(
                     }
                 }
 
+                // Card de Meta
+                item {
+                    if (currentGoal == null) {
+                        // Crear meta
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showGoalDialog = true },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFFF5F5F5)
+                            ),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Trazar meta de ahorro",
+                                        fontSize = 16.sp,
+                                        fontFamily = Poppins,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Black
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Define tu objetivo financiero",
+                                        fontSize = 12.sp,
+                                        fontFamily = Poppins,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        // Mostrar meta actual
+                        GoalProgressCard(
+                            goal = currentGoal!!,
+                            saldoGuardado = saldoGuardado,
+                            onDeleteGoal = {
+                                val user = auth.currentUser
+                                if (user != null) {
+                                    db.collection("metasAhorro").document(currentGoal!!.id)
+                                        .update("activa", false)
+                                        .addOnSuccessListener {
+                                            Toast.makeText(context, "Meta eliminada", Toast.LENGTH_SHORT).show()
+                                        }
+                                }
+                            }
+                        )
+                    }
+                }
+
                 // Título historial
                 item {
                     Text(
@@ -352,7 +457,10 @@ fun SavingsScreen(
                 isLoading = isLoading,
                 errorMessage = errorMessage,
                 maxAmount = saldoDisponible?.toFloat() ?: 0f,
-                onDismiss = { showSaveDialog = false },
+                onDismiss = {
+                    showSaveDialog = false
+                    errorMessage = null
+                },
                 onConfirm = {
                     errorMessage = null
                     isLoading = true
@@ -393,6 +501,7 @@ fun SavingsScreen(
 
                                         isLoading = false
                                         showSaveDialog = false
+                                        errorMessage = null
 
                                         Toast.makeText(
                                             context,
@@ -418,7 +527,10 @@ fun SavingsScreen(
                 isLoading = isLoading,
                 errorMessage = errorMessage,
                 maxAmount = saldoGuardado.toFloat(),
-                onDismiss = { showWithdrawDialog = false },
+                onDismiss = {
+                    showWithdrawDialog = false
+                    errorMessage = null
+                },
                 onConfirm = {
                     errorMessage = null
                     isLoading = true
@@ -459,6 +571,7 @@ fun SavingsScreen(
 
                                         isLoading = false
                                         showWithdrawDialog = false
+                                        errorMessage = null
 
                                         Toast.makeText(
                                             context,
@@ -475,8 +588,356 @@ fun SavingsScreen(
                 }
             )
         }
-    } // <- Cierra Box
-} // <- Cierra SavingsScreen
+
+        // Diálogo de crear meta
+        if (showGoalDialog) {
+            CreateGoalDialog(
+                onDismiss = { showGoalDialog = false },
+                onConfirm = { nombre, monto ->
+                    val user = auth.currentUser
+                    if (user != null) {
+                        val meta = hashMapOf(
+                            "usuarioId" to user.uid,
+                            "nombre" to nombre,
+                            "montoObjetivo" to monto,
+                            "montoActual" to 0.0,
+                            "activa" to true,
+                            "completada" to false,
+                            "fechaCreacion" to Timestamp.now()
+                        )
+
+                        db.collection("metasAhorro").add(meta)
+                            .addOnSuccessListener {
+                                showGoalDialog = false
+                                Toast.makeText(context, "Meta creada exitosamente", Toast.LENGTH_SHORT).show()
+                            }
+                            .addOnFailureListener {
+                                Toast.makeText(context, "Error al crear la meta", Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun GoalProgressCard(
+    goal: SavingsGoal,
+    saldoGuardado: Double,
+    onDeleteGoal: () -> Unit
+) {
+    val progreso = ((saldoGuardado / goal.montoObjetivo) * 100).coerceIn(0.0, 100.0)
+    val porcentajeTexto = "%.0f".format(progreso)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (goal.completada) Color(0xFF4CAF50).copy(alpha = 0.1f) else Color(0xFFF5F5F5)
+        ),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (goal.completada) "¡Meta Completada! 🎉" else "Meta de Ahorro",
+                        fontSize = if (goal.completada) 18.sp else 14.sp,
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.Bold,
+                        color = if (goal.completada) Color(0xFF4CAF50) else Color.Black
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = goal.nombre,
+                        fontSize = 16.sp,
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Black
+                    )
+                }
+
+                if (!goal.completada) {
+                    Text(
+                        text = "$porcentajeTexto%",
+                        fontSize = 24.sp,
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+            }
+
+            if (!goal.completada) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Barra de progreso
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .background(
+                            color = Color.White,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction = (progreso / 100).toFloat())
+                            .fillMaxHeight()
+                            .background(
+                                color = Color(0xFF4CAF50),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Guardado",
+                            fontSize = 11.sp,
+                            fontFamily = Poppins,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = "$ ${"%,.0f".format(saldoGuardado)}",
+                            fontSize = 14.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Objetivo",
+                            fontSize = 11.sp,
+                            fontFamily = Poppins,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = "$ ${"%,.0f".format(goal.montoObjetivo)}",
+                            fontSize = 14.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
+                        )
+                    }
+                }
+
+                val faltante = (goal.montoObjetivo - saldoGuardado).coerceAtLeast(0.0)
+                if (faltante > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Faltan $ ${"%,.0f".format(faltante)} para tu meta",
+                        fontSize = 11.sp,
+                        fontFamily = Poppins,
+                        color = Color.Gray,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "$ ${"%,.0f".format(goal.montoObjetivo)}",
+                    fontSize = 28.sp,
+                    fontFamily = Poppins,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            TextButton(
+                onClick = onDeleteGoal,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Eliminar meta",
+                    fontFamily = Poppins,
+                    fontSize = 12.sp,
+                    color = Color.Red
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CreateGoalDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double) -> Unit
+) {
+    var goalName by remember { mutableStateOf("") }
+    var goalAmount by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onDismiss() }
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .wrapContentHeight()
+                .align(Alignment.Center)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { },
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardDefaults.cardElevation(8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Flag,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(48.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Crear Meta de Ahorro",
+                    fontFamily = Poppins,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = Color.Black
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                OutlinedTextField(
+                    value = goalName,
+                    onValueChange = { goalName = it },
+                    label = {
+                        Text(
+                            text = "Nombre de la meta",
+                            fontFamily = Poppins,
+                            fontSize = 14.sp
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            text = "Ej: Vacaciones, Auto nuevo",
+                            fontFamily = Poppins,
+                            fontSize = 12.sp
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF4CAF50),
+                        unfocusedBorderColor = Color.Black.copy(alpha = 0.3f),
+                        focusedLabelColor = Color(0xFF4CAF50),
+                        cursorColor = Color(0xFF4CAF50)
+                    ),
+                    textStyle = TextStyle(
+                        fontFamily = Poppins,
+                        fontSize = 16.sp,
+                        color = Color.Black
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = goalAmount,
+                    onValueChange = { input ->
+                        val cleanInput = input.replace(",", "").replace(".", "")
+                        if (cleanInput.isEmpty() || cleanInput.all { it.isDigit() }) {
+                            goalAmount = cleanInput
+                        }
+                    },
+                    label = {
+                        Text(
+                            text = "Monto objetivo",
+                            fontFamily = Poppins,
+                            fontSize = 14.sp
+                        )
+                    },
+                    prefix = {
+                        Text(
+                            text = "$",
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF4CAF50),
+                        unfocusedBorderColor = Color.Black.copy(alpha = 0.3f),
+                        focusedLabelColor = Color(0xFF4CAF50),
+                        cursorColor = Color(0xFF4CAF50)
+                    ),
+                    textStyle = TextStyle(
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = Color.Black
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = {
+                        val amount = goalAmount.toDoubleOrNull()
+                        if (goalName.isNotBlank() && amount != null && amount > 0) {
+                            onConfirm(goalName, amount)
+                        }
+                    },
+                    enabled = goalName.isNotBlank() && goalAmount.toDoubleOrNull() != null && goalAmount.toDouble() > 0,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF4CAF50)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Crear Meta",
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun SaveMoneyDialog(
@@ -542,6 +1003,8 @@ fun SaveMoneyDialog(
                         val newAmount = cleanInput.toFloatOrNull()
                         if (newAmount != null && newAmount <= maxAmount) {
                             onAmountChange(newAmount)
+                        } else if (cleanInput.isEmpty()) {
+                            onAmountChange(0f)
                         }
                     },
                     label = {
@@ -682,6 +1145,8 @@ fun WithdrawMoneyDialog(
                         val newAmount = cleanInput.toFloatOrNull()
                         if (newAmount != null && newAmount <= maxAmount) {
                             onAmountChange(newAmount)
+                        } else if (cleanInput.isEmpty()) {
+                            onAmountChange(0f)
                         }
                     },
                     label = {
@@ -803,7 +1268,9 @@ fun SavingItem(saving: Saving) {
                     color = Color.Black
                 )
                 Text(
-                    text = saving.fecha?.toDate()?.toString() ?: "",
+                    text = saving.fecha?.toDate()?.let {
+                        java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault()).format(it)
+                    } ?: "",
                     fontSize = 12.sp,
                     fontFamily = Poppins,
                     color = Color.Gray
@@ -812,7 +1279,7 @@ fun SavingItem(saving: Saving) {
         }
 
         Text(
-            text = "$amountPrefix${"%,.0f".format(saving.monto)}",
+            text = "$amountPrefix$ ${"%,.0f".format(saving.monto)}",
             fontSize = 16.sp,
             fontFamily = Poppins,
             fontWeight = FontWeight.Bold,
@@ -820,5 +1287,3 @@ fun SavingItem(saving: Saving) {
         )
     }
 }
-
-

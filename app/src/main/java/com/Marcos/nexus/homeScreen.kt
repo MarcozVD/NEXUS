@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,20 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import com.google.firebase.Timestamp
+
+// Data class para la meta de ahorro
+data class SavingsGoal(
+    val id: String = "",
+    val nombre: String = "",
+    val montoObjetivo: Double = 0.0,
+    val montoActual: Double = 0.0,
+    val activa: Boolean = true,
+    val completada: Boolean = false,
+    val fechaCreacion: Timestamp? = null,
+    val fechaCompletada: Timestamp? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +64,7 @@ fun NexusHomeScreen(
     var rechargeAmount by remember { mutableStateOf(5000f) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var savingsGoal by remember { mutableStateOf<SavingsGoal?>(null) }
 
     // Calcular saldo total y disponible
     val saldoTotal = (saldo ?: 0.0) + saldoGuardado
@@ -69,6 +85,43 @@ fun NexusHomeScreen(
                     } else {
                         saldo = 0.0
                         saldoGuardado = 0.0
+                    }
+                }
+
+            // Obtener meta de ahorro activa
+            db.collection("metasAhorro")
+                .whereEqualTo("usuarioId", user.uid)
+                .whereEqualTo("activa", true)
+                .limit(1)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) return@addSnapshotListener
+
+                    savingsGoal = snapshot?.documents?.firstOrNull()?.let { doc ->
+                        val montoActual = saldoGuardado
+                        val montoObjetivo = doc.getDouble("montoObjetivo") ?: 0.0
+                        val completada = montoActual >= montoObjetivo
+
+                        // Si se completó, marcarla como completada
+                        if (completada && doc.getBoolean("completada") != true) {
+                            db.collection("metasAhorro").document(doc.id)
+                                .update(
+                                    mapOf(
+                                        "completada" to true,
+                                        "fechaCompletada" to Timestamp.now()
+                                    )
+                                )
+                        }
+
+                        SavingsGoal(
+                            id = doc.id,
+                            nombre = doc.getString("nombre") ?: "",
+                            montoObjetivo = montoObjetivo,
+                            montoActual = montoActual,
+                            activa = doc.getBoolean("activa") ?: true,
+                            completada = completada,
+                            fechaCreacion = doc.getTimestamp("fechaCreacion"),
+                            fechaCompletada = doc.getTimestamp("fechaCompletada")
+                        )
                     }
                 }
         }
@@ -294,6 +347,13 @@ fun NexusHomeScreen(
                         )
                     }
                 }
+
+                // Card de Meta de Ahorro
+                SavingsGoalCard(
+                    goal = savingsGoal,
+                    saldoGuardado = saldoGuardado,
+                    onClick = onNavigateToSavings
+                )
 
                 Spacer(modifier = Modifier.weight(1f))
 
@@ -527,6 +587,248 @@ fun NexusHomeScreen(
 }
 
 @Composable
+fun SavingsGoalCard(
+    goal: SavingsGoal?,
+    saldoGuardado: Double,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    if (goal == null) {
+        // Mostrar cuando no hay meta trazada
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFFF5F5F5)
+            ),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "No hay meta trazada",
+                        fontSize = 16.sp,
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Crea una meta de ahorro",
+                        fontSize = 12.sp,
+                        fontFamily = Poppins,
+                        color = Color.Gray.copy(alpha = 0.7f)
+                    )
+                }
+
+                Icon(
+                    painter = painterResource(id = R.drawable.guardar),
+                    contentDescription = null,
+                    tint = Color.Gray,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    } else if (goal.completada) {
+        // Mostrar cuando la meta está completa
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF4CAF50).copy(alpha = 0.1f)
+            ),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "¡Meta Completada! 🎉",
+                            fontSize = 18.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = goal.nombre,
+                            fontSize = 14.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "$ ${"%,.0f".format(goal.montoObjetivo)}",
+                    fontSize = 24.sp,
+                    fontFamily = Poppins,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+            }
+        }
+    } else {
+        // Mostrar progreso de la meta activa
+        val progreso = ((saldoGuardado / goal.montoObjetivo) * 100).coerceIn(0.0, 100.0)
+        val porcentajeTexto = "%.0f".format(progreso)
+
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable { onClick() },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFFF5F5F5)
+            ),
+            elevation = CardDefaults.cardElevation(2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Meta de Ahorro",
+                            fontSize = 12.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = goal.nombre,
+                            fontSize = 16.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                    }
+
+                    Text(
+                        text = "$porcentajeTexto%",
+                        fontSize = 20.sp,
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Barra de progreso
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(12.dp)
+                        .background(
+                            color = Color.White,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction = (progreso / 100).toFloat())
+                            .fillMaxHeight()
+                            .background(
+                                color = Color(0xFF4CAF50),
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Guardado",
+                            fontSize = 11.sp,
+                            fontFamily = Poppins,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = "$ ${"%,.0f".format(saldoGuardado)}",
+                            fontSize = 14.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Objetivo",
+                            fontSize = 11.sp,
+                            fontFamily = Poppins,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = "$ ${"%,.0f".format(goal.montoObjetivo)}",
+                            fontSize = 14.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
+                        )
+                    }
+                }
+
+                // Falta para completar
+                val faltante = (goal.montoObjetivo - saldoGuardado).coerceAtLeast(0.0)
+                if (faltante > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Faltan $ ${"%,.0f".format(faltante)} para tu meta",
+                        fontSize = 11.sp,
+                        fontFamily = Poppins,
+                        color = Color.Gray,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ActionCard(
     modifier: Modifier = Modifier,
     icon: Int,
@@ -579,4 +881,3 @@ fun ActionCard(
         }
     }
 }
-
