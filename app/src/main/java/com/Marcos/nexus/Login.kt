@@ -241,9 +241,9 @@ fun NexusLoginScreen(navController: NavController) {
                                 // Guardar credenciales si la autenticación biométrica está disponible
                                 if (biometricHelper?.isBiometricAvailable() == true) {
                                     BiometricHelper.saveCredentials(context, email.trim(), password.trim())
-                                    Toast.makeText(context, "✅ Credenciales guardadas para huella", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Credenciales guardadas para huella", Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "⚠️ Biometric no disponible", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Biometric no disponible", Toast.LENGTH_SHORT).show()
                                 }
 
                                 isLoading = false
@@ -388,7 +388,7 @@ fun NexusLoginScreen(navController: NavController) {
                         .addOnSuccessListener {
                             Toast.makeText(
                                 context,
-                                "✅ Correo de recuperación enviado. Revisa tu bandeja de entrada.",
+                                "Correo de recuperación enviado. Revisa tu bandeja de entrada.",
                                 Toast.LENGTH_LONG
                             ).show()
                             showForgotPasswordDialog = false

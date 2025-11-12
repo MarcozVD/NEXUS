@@ -1,9 +1,25 @@
 package com.Marcos.nexus
-
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.Marcos.nexus.Poppins
+import java.text.NumberFormat
+import java.util.Locale
+
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -11,24 +27,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import android.widget.Toast
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import java.util.Calendar
 
 data class Investment(
     val id: String = "",
@@ -366,8 +375,8 @@ fun InvestmentsScreen(
 
                                     userRef.update("saldo", nuevoSaldo)
                                         .addOnSuccessListener {
-                                            val calendar = java.util.Calendar.getInstance()
-                                            calendar.add(java.util.Calendar.MONTH, selectedOption!!.plazoMeses)
+                                            val calendar = Calendar.getInstance()
+                                            calendar.add(Calendar.MONTH, selectedOption!!.plazoMeses)
 
                                             val inversion = hashMapOf(
                                                 "usuarioId" to user.uid,
@@ -421,8 +430,8 @@ fun InvestmentsScreen(
 // 🔥 FUNCIÓN PARA VERIFICAR INVERSIONES COMPLETADAS
 fun verificarInversionesCompletadas(
     userId: String,
-    db: com.google.firebase.firestore.FirebaseFirestore,
-    context: android.content.Context
+    db: FirebaseFirestore,
+    context: Context
 ) {
     val ahora = Timestamp.now()
 
@@ -708,8 +717,10 @@ fun InvestDialog(
     onDismiss: () -> Unit,
     onConfirm: (Double) -> Unit
 ) {
-    var amount by remember { mutableStateOf(option.montoMinimo.toFloat()) }
-    var isLoading by remember { mutableStateOf(false) }
+    // --- Control del monto y formato ---
+    val formatter = remember { NumberFormat.getNumberInstance(Locale.US) }
+    var amountText by remember { mutableStateOf(formatter.format(option.montoMinimo.toInt())) }
+    val amount = amountText.replace(",", "").toDoubleOrNull() ?: 0.0
 
     Box(
         modifier = Modifier
@@ -788,29 +799,24 @@ fun InvestDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // --- Campo de texto con formateo automático ---
                 OutlinedTextField(
-                    value = if (amount > 0) "%,.0f".format(amount) else "",
+                    value = amountText,
                     onValueChange = { input ->
-                        val cleanInput = input.replace(",", "").replace(".", "")
-                        val newAmount = cleanInput.toFloatOrNull()
-                        if (newAmount != null && newAmount >= option.montoMinimo && newAmount <= saldoDisponible) {
-                            amount = newAmount
+                        val cleanInput = input.replace(Regex("[^\\d]"), "")
+                        if (cleanInput.isNotEmpty()) {
+                            try {
+                                val number = cleanInput.toLong()
+                                amountText = formatter.format(number)
+                            } catch (e: NumberFormatException) {
+                                // Si el número es demasiado grande, lo ignoramos
+                            }
+                        } else {
+                            amountText = ""
                         }
                     },
-                    label = {
-                        Text(
-                            text = "Monto a invertir",
-                            fontFamily = Poppins,
-                            fontSize = 14.sp
-                        )
-                    },
-                    prefix = {
-                        Text(
-                            text = "$",
-                            fontFamily = Poppins,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
+                    label = { Text("Monto a invertir", fontFamily = Poppins, fontSize = 14.sp) },
+                    prefix = { Text("$", fontFamily = Poppins, fontWeight = FontWeight.Bold) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
@@ -839,18 +845,16 @@ fun InvestDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                val canInvest = amount >= option.montoMinimo && amount <= saldoDisponible
+
                 Button(
-                    onClick = {
-                        if (amount >= option.montoMinimo && amount <= saldoDisponible) {
-                            onConfirm(amount.toDouble())
-                        }
-                    },
-                    enabled = !isLoading && amount >= option.montoMinimo && amount <= saldoDisponible,
+                    onClick = { if (canInvest) onConfirm(amount) },
+                    enabled = canInvest,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.Black
+                        containerColor = if (canInvest) Color.Black else Color.Gray.copy(alpha = 0.3f)
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
