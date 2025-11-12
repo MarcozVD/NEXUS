@@ -451,12 +451,24 @@ fun WalletChart(
             modifier = modifier,
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "No hay datos para mostrar",
-                fontFamily = Poppins,
-                fontSize = 12.sp,
-                color = Color.Gray
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ShowChart,
+                    contentDescription = null,
+                    tint = Color.Gray.copy(alpha = 0.5f),
+                    modifier = Modifier.size(48.dp)
+                )
+                Text(
+                    text = "No hay datos para mostrar",
+                    fontFamily = Poppins,
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
         return
     }
@@ -464,7 +476,7 @@ fun WalletChart(
     // Agrupar por día (últimos 7 días)
     val calendar = Calendar.getInstance()
     val today = calendar.time
-    val dataPoints = mutableListOf<Pair<String, Double>>()
+    val dataPoints = mutableListOf<Triple<String, Double, Int>>() // Día, Monto, Cantidad
 
     for (i in 6 downTo 0) {
         calendar.time = today
@@ -481,49 +493,169 @@ fun WalletChart(
             set(Calendar.SECOND, 59)
         }.time
 
-        val dayTotal = ingresos
-            .filter {
-                val date = it.fecha?.toDate()
-                date != null && date.after(dayStart) && date.before(dayEnd)
-            }
-            .sumOf { it.monto }
+        val dayTransactions = ingresos.filter {
+            val date = it.fecha?.toDate()
+            date != null && date.after(dayStart) && date.before(dayEnd)
+        }
+
+        val dayTotal = dayTransactions.sumOf { it.monto }
+        val dayCount = dayTransactions.size
 
         val dayLabel = SimpleDateFormat("EEE", Locale.getDefault()).format(dayStart)
-        dataPoints.add(dayLabel to dayTotal)
+        dataPoints.add(Triple(dayLabel, dayTotal, dayCount))
     }
 
     val maxValue = dataPoints.maxOfOrNull { it.second } ?: 1.0
 
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val spacing = width / (dataPoints.size - 1)
+    Column(modifier = modifier) {
+        // Gráfica
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            val width = size.width
+            val height = size.height
+            val spacing = width / (dataPoints.size - 1)
+            val padding = 40f
 
-        // Dibujar líneas
-        val path = Path()
-        dataPoints.forEachIndexed { index, (_, value) ->
-            val x = index * spacing
-            val y = height - (value / maxValue * height * 0.8f).toFloat()
-
-            if (index == 0) {
-                path.moveTo(x, y)
-            } else {
-                path.lineTo(x, y)
+            // Dibujar líneas de fondo (grid)
+            for (i in 0..3) {
+                val y = height * (i / 3f)
+                drawLine(
+                    color = Color.Gray.copy(alpha = 0.1f),
+                    start = Offset(0f, y),
+                    end = Offset(width, y),
+                    strokeWidth = 1f
+                )
             }
 
-            // Dibujar puntos
-            drawCircle(
+            // Dibujar línea principal
+            val path = Path()
+            dataPoints.forEachIndexed { index, (_, value, _) ->
+                val x = index * spacing
+                val y = if (maxValue > 0) {
+                    height - padding - ((value / maxValue) * (height - padding * 2)).toFloat()
+                } else {
+                    height - padding
+                }
+
+                if (index == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    path.lineTo(x, y)
+                }
+            }
+
+            // Dibujar la línea
+            drawPath(
+                path = path,
                 color = Color(0xFF4CAF50),
-                radius = 6f,
-                center = Offset(x, y)
+                style = Stroke(width = 3f)
             )
+
+            // Dibujar puntos y picos
+            dataPoints.forEachIndexed { index, (_, value, count) ->
+                val x = index * spacing
+                val y = if (maxValue > 0) {
+                    height - padding - ((value / maxValue) * (height - padding * 2)).toFloat()
+                } else {
+                    height - padding
+                }
+
+                // Si hay transacción, dibujar punto más grande (pico)
+                if (count > 0) {
+                    // Círculo exterior (glow)
+                    drawCircle(
+                        color = Color(0xFF4CAF50).copy(alpha = 0.3f),
+                        radius = 12f,
+                        center = Offset(x, y)
+                    )
+                    // Círculo principal
+                    drawCircle(
+                        color = Color(0xFF4CAF50),
+                        radius = 8f,
+                        center = Offset(x, y)
+                    )
+                    // Círculo interior blanco
+                    drawCircle(
+                        color = Color.White,
+                        radius = 3f,
+                        center = Offset(x, y)
+                    )
+
+                    // Si hubo múltiples inversiones, agregar badge
+                    if (count > 1) {
+                        drawCircle(
+                            color = Color.Red,
+                            radius = 10f,
+                            center = Offset(x + 8f, y - 8f)
+                        )
+                    }
+                } else {
+                    // Punto normal pequeño
+                    drawCircle(
+                        color = Color.Gray.copy(alpha = 0.5f),
+                        radius = 4f,
+                        center = Offset(x, y)
+                    )
+                }
+            }
         }
 
-        drawPath(
-            path = path,
-            color = Color(0xFF4CAF50),
-            style = Stroke(width = 4f)
-        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Labels de días
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            dataPoints.forEach { (label, _, count) ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = label,
+                        fontFamily = Poppins,
+                        fontSize = 10.sp,
+                        color = if (count > 0) Color.Black else Color.Gray,
+                        fontWeight = if (count > 0) FontWeight.Bold else FontWeight.Normal
+                    )
+                    if (count > 0) {
+                        Text(
+                            text = "$count",
+                            fontFamily = Poppins,
+                            fontSize = 8.sp,
+                            color = Color(0xFF4CAF50),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Leyenda
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(Color(0xFF4CAF50), CircleShape)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Inversión completada",
+                fontFamily = Poppins,
+                fontSize = 10.sp,
+                color = Color.Gray
+            )
+        }
     }
 }
 
@@ -590,7 +722,6 @@ fun StatCard(
         }
     }
 }
-
 @Composable
 fun WalletTransactionItem(transaction: WalletTransaction) {
     val isIncome = transaction.tipo == "ingreso"
@@ -598,59 +729,68 @@ fun WalletTransactionItem(transaction: WalletTransaction) {
     val iconColor = if (isIncome) Color(0xFF4CAF50) else Color(0xFF2196F3)
     val amountPrefix = if (isIncome) "+" else "-"
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = iconColor.copy(alpha = 0.1f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(20.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = iconColor.copy(alpha = 0.1f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = transaction.descripcion,
+                        fontSize = 14.sp,
+                        fontFamily = Poppins,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.Black,
+                        maxLines = 2
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = formatTransactionDate(transaction.fecha),
+                        fontSize = 12.sp,
+                        fontFamily = Poppins,
+                        color = Color.Gray
+                    )
+                }
             }
 
-            Column {
-                Text(
-                    text = transaction.descripcion,
-                    fontSize = 14.sp,
-                    fontFamily = Poppins,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black
-                )
-                Text(
-                    text = formatTransactionDate(transaction.fecha),
-                    fontSize = 12.sp,
-                    fontFamily = Poppins,
-                    color = Color.Gray
-                )
-            }
+            Text(
+                text = "$amountPrefix $ ${"%,.0f".format(transaction.monto)}",
+                fontSize = 16.sp,
+                fontFamily = Poppins,
+                fontWeight = FontWeight.Bold,
+                color = iconColor
+            )
         }
-
-        Text(
-            text = "$amountPrefix$ ${"%,.0f".format(transaction.monto)}",
-            fontSize = 16.sp,
-            fontFamily = Poppins,
-            fontWeight = FontWeight.Bold,
-            color = iconColor
-        )
     }
 }
 

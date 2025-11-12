@@ -9,10 +9,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -262,6 +265,7 @@ fun ProductsScreen(
             }
 
             // Cartera e Inversiones
+            // Cartera e Inversiones
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -306,19 +310,21 @@ fun ProductsScreen(
                                     )
                                 }
 
-                                // Ilustración de billetera
+                                // Icono de billetera
                                 Box(
                                     modifier = Modifier
                                         .size(60.dp)
                                         .background(
-                                            color = Color(0xFF4CAF50).copy(alpha = 0.3f),
+                                            color = Color.White.copy(alpha = 0.15f),
                                             shape = CircleShape
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "💰",
-                                        fontSize = 32.sp
+                                    Icon(
+                                        imageVector = Icons.Default.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(32.dp)
                                     )
                                 }
                             }
@@ -364,19 +370,21 @@ fun ProductsScreen(
                                     )
                                 }
 
-                                // Ilustración de monedas
+                                // Icono de gráfica
                                 Box(
                                     modifier = Modifier
                                         .size(60.dp)
                                         .background(
-                                            color = Color(0xFFFFC107).copy(alpha = 0.3f),
+                                            color = Color.White.copy(alpha = 0.15f),
                                             shape = CircleShape
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = "💸",
-                                        fontSize = 32.sp
+                                    Icon(
+                                        imageVector = Icons.Default.TrendingUp,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(32.dp)
                                     )
                                 }
                             }

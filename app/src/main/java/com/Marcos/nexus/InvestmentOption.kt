@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,6 +37,9 @@ import android.widget.Toast
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Calendar
+
+// 🔥 MODO DE PRUEBA: true = minutos, false = meses reales
+const val TEST_MODE = true
 
 data class Investment(
     val id: String = "",
@@ -205,13 +207,15 @@ fun InvestmentsScreen(
                         )
                     }
 
-                    Text(
-                        text = "NEXUS",
-                        fontSize = 20.sp,
-                        fontFamily = Poppins,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.Black
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "NEXUS",
+                            fontSize = 20.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Black
+                        )
+                    }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(onClick = onNavigateToNotifications) {
@@ -238,13 +242,35 @@ fun InvestmentsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    Text(
-                        text = "Inversiones",
-                        fontSize = 24.sp,
-                        fontFamily = Poppins,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Inversiones",
+                            fontSize = 24.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+
+                        if (TEST_MODE) {
+                            Surface(
+                                color = Color.Red.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "1 mes = 1 min",
+                                    fontSize = 10.sp,
+                                    fontFamily = Poppins,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Red,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 item {
@@ -376,7 +402,13 @@ fun InvestmentsScreen(
                                     userRef.update("saldo", nuevoSaldo)
                                         .addOnSuccessListener {
                                             val calendar = Calendar.getInstance()
-                                            calendar.add(Calendar.MONTH, selectedOption!!.plazoMeses)
+
+                                            // 🔥 MODO PRUEBA: minutos en lugar de meses
+                                            if (TEST_MODE) {
+                                                calendar.add(Calendar.MINUTE, selectedOption!!.plazoMeses)
+                                            } else {
+                                                calendar.add(Calendar.MONTH, selectedOption!!.plazoMeses)
+                                            }
 
                                             val inversion = hashMapOf(
                                                 "usuarioId" to user.uid,
@@ -392,12 +424,12 @@ fun InvestmentsScreen(
 
                                             db.collection("inversiones").add(inversion)
                                                 .addOnSuccessListener {
-                                                    // 🔥 CREAR NOTIFICACIÓN DE INVERSIÓN REALIZADA
+                                                    val timeUnit = if (TEST_MODE) "minutos" else "meses"
                                                     val notificacion = hashMapOf(
                                                         "userId" to user.uid,
                                                         "tipo" to "inversion",
                                                         "titulo" to "Inversión realizada",
-                                                        "mensaje" to "Has invertido $${"%,.0f".format(amount)} en ${selectedOption!!.nombre} con una tasa del ${selectedOption!!.tasaInteres}% anual por ${selectedOption!!.plazoMeses} meses.",
+                                                        "mensaje" to "Has invertido $${"%,.0f".format(amount)} en ${selectedOption!!.nombre} con una tasa del ${selectedOption!!.tasaInteres}% anual por ${selectedOption!!.plazoMeses} $timeUnit.",
                                                         "fecha" to Timestamp.now(),
                                                         "leida" to false
                                                     )
@@ -427,7 +459,7 @@ fun InvestmentsScreen(
     }
 }
 
-// 🔥 FUNCIÓN PARA VERIFICAR INVERSIONES COMPLETADAS
+//  FUNCIÓN PARA VERIFICAR INVERSIONES COMPLETADAS
 fun verificarInversionesCompletadas(
     userId: String,
     db: FirebaseFirestore,
@@ -460,24 +492,22 @@ fun verificarInversionesCompletadas(
                             val saldoCarteraActual = userDoc.getDouble("saldoCartera") ?: 0.0
                             val nuevoSaldoCartera = saldoCarteraActual + montoFinal
 
-                            // 🔥 ACTUALIZAR SOLO CARTERA (no saldo disponible)
                             userRef.update("saldoCartera", nuevoSaldoCartera)
                                 .addOnSuccessListener {
                                     doc.reference.update("estado", "completada")
 
-                                    // Notificación
+                                    val timeUnit = if (TEST_MODE) "minutos" else "meses"
                                     val notificacion = hashMapOf(
                                         "userId" to userId,
                                         "tipo" to "ganancia",
                                         "titulo" to "¡Inversión completada!",
-                                        "mensaje" to "Tu inversión en $nombre ha finalizado. Ganaste $${"%,.0f".format(gananciaTotal)}. Total en cartera: $${"%,.0f".format(montoFinal)}",
+                                        "mensaje" to "Tu inversión en $nombre ha finalizado después de $plazo $timeUnit. Ganaste $${"%,.0f".format(gananciaTotal)}. Total en cartera: $${"%,.0f".format(montoFinal)}",
                                         "fecha" to Timestamp.now(),
                                         "leida" to false
                                     )
 
                                     db.collection("notificaciones").add(notificacion)
 
-                                    // Transacción general
                                     val transaccion = hashMapOf(
                                         "remitenteId" to userId,
                                         "destinatarioId" to userId,
@@ -492,7 +522,6 @@ fun verificarInversionesCompletadas(
 
                                     db.collection("transacciones").add(transaccion)
 
-                                    // 🔥 TRANSACCIÓN DE CARTERA
                                     val carteraTransaccion = hashMapOf(
                                         "usuarioId" to userId,
                                         "monto" to montoFinal,
@@ -521,6 +550,8 @@ fun InvestmentOptionCard(
     option: InvestmentOption,
     onClick: () -> Unit
 ) {
+    val timeUnit = if (TEST_MODE) "min" else "meses"
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -597,7 +628,7 @@ fun InvestmentOptionCard(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "${option.plazoMeses} meses",
+                                text = "${option.plazoMeses} $timeUnit",
                                 fontSize = 11.sp,
                                 fontFamily = Poppins,
                                 color = Color.Black.copy(alpha = 0.6f),
@@ -620,6 +651,7 @@ fun InvestmentOptionCard(
 @Composable
 fun MyInvestmentCard(investment: Investment) {
     val isCompleted = investment.estado == "completada"
+    val timeUnit = if (TEST_MODE) "min" else "meses"
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -701,7 +733,7 @@ fun MyInvestmentCard(investment: Investment) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Plazo: ${investment.plazo} meses",
+                text = "Plazo: ${investment.plazo} $timeUnit",
                 fontSize = 12.sp,
                 fontFamily = Poppins,
                 color = Color.Gray
@@ -717,10 +749,10 @@ fun InvestDialog(
     onDismiss: () -> Unit,
     onConfirm: (Double) -> Unit
 ) {
-    // --- Control del monto y formato ---
     val formatter = remember { NumberFormat.getNumberInstance(Locale.US) }
     var amountText by remember { mutableStateOf(formatter.format(option.montoMinimo.toInt())) }
     val amount = amountText.replace(",", "").toDoubleOrNull() ?: 0.0
+    val timeUnit = if (TEST_MODE) "min" else "m"
 
     Box(
         modifier = Modifier
@@ -784,7 +816,7 @@ fun InvestDialog(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     InfoChip(label = "Tasa", value = "${option.tasaInteres}%", color = option.color)
-                    InfoChip(label = "Plazo", value = "${option.plazoMeses}m", color = Color.Black)
+                    InfoChip(label = "Plazo", value = "${option.plazoMeses}$timeUnit", color = Color.Black)
                     InfoChip(label = "Riesgo", value = option.riesgo, color = Color.Gray)
                 }
 
@@ -799,7 +831,6 @@ fun InvestDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // --- Campo de texto con formateo automático ---
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { input ->
@@ -809,7 +840,7 @@ fun InvestDialog(
                                 val number = cleanInput.toLong()
                                 amountText = formatter.format(number)
                             } catch (e: NumberFormatException) {
-                                // Si el número es demasiado grande, lo ignoramos
+                                // Ignorar si el número es muy grande
                             }
                         } else {
                             amountText = ""

@@ -133,7 +133,6 @@ class BiometricHelper(private val activity: FragmentActivity) {
 
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    // No mostrar error en cada intento fallido, solo cuando se agoten
                 }
             }
         )
